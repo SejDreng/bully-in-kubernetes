@@ -1,0 +1,11 @@
+#!/bin/bash
+echo "Starting minikube"
+minikube start
+echo "Setting environment"
+eval $(minikube -p minikube docker-env)
+echo "Building docker and setting k8s"
+docker build -t bully-app .
+kubectl apply -f k8s/headless-service.yaml
+kubectl apply -f k8s/deployment.yaml
+
+echo -e  "All done daddy \U0001F346 \U0001F4A6 \U0001F629"
