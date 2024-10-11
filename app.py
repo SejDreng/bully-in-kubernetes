@@ -9,13 +9,15 @@ WEB_PORT = 8080
 POD_IP = os.environ.get('POD_IP', socket.gethostbyname(socket.gethostname()))
 POD_ID = random.randint(1, 100)
 LEADER_ID = None
+LEADER_IP = None
 POD_HOSTNAME = socket.gethostname()
 
 class Node():
-    def __init__(self, id, leader, hostname):
+    def __init__(self, id, leader, leader_ip, hostname):
         self.id = id
         self.hostname = hostname
         self.leader = leader
+        self.leader_ip = leader_ip
         self.network = {}  # Dictionary of pod_ip: pod_id
         self.available = True
 
@@ -28,6 +30,7 @@ class Node():
                         return True
             except Exception as e:
                 print(f"Error pinging pod {pod_ip}: {e}")
+                return False
         return False
 
     async def startElection(self):
@@ -72,48 +75,59 @@ class Node():
 
     async def setNewLeader(self):
         global LEADER_ID
+        global LEADER_IP
         LEADER_ID = self.id
+        LEADER_IP = POD_IP
         print(f"I am the new leader: {LEADER_ID}, POD hostname is {self.hostname}")
+        print("hmmm")
         for pod_ip in self.network.keys():
-            await self.notify_new_leader(pod_ip, self.id, self.hostname)
+            print("succes")
+            await self.notify_new_leader(pod_ip, self.id, POD_IP ,self.hostname)
 
-    async def notify_new_leader(self, pod_ip, new_leader_id, leader_hostname):
+    async def notify_new_leader(self, pod_ip, new_leader_id, new_leader_ip, leader_hostname):
         async with aiohttp.ClientSession() as session:
             try:
-                async with session.post(f'http://{pod_ip}:{WEB_PORT}/receive_coordinator', json={'leader_id': new_leader_id, 'leader_hostname':leader_hostname}) as resp:
+                async with session.post(f'http://{pod_ip}:{WEB_PORT}/receive_coordinator', json={'leader_id': new_leader_id, 'leader_hostname':leader_hostname, "leader_ip":new_leader_ip}) as resp:
                     return await resp.json()
             except Exception as e:
                 print(f"Error notifying new leader to {pod_ip}: {e}")
                 return False
 
-async def run_bully():
+async def main_loop(node):
+    global LEADER_IP
     global LEADER_ID
-    global POD_ID
-    global POD_HOSTNAME
-    node = Node(POD_ID, LEADER_ID, POD_HOSTNAME)
-    print(f"My ID is: {POD_ID} and my hostname is {POD_HOSTNAME}")
     while True:
-        print("Running bully algorithm")
-        await asyncio.sleep(5)  # Wait for everything to be up
-
+        print("pik")
+        node.leader_ip = LEADER_IP
+        node.leader = LEADER_ID
+        await asyncio.sleep(2)
+        
+        #ping leader
+        if node.leader_ip != None:
+            leader_liveness = await node.isalive(node.leader_ip)
+        
+        #If leader is dead start a new election only once.
+        if not leader_liveness and node.leader_ip != None:
+            print("Leader is dead. Starting new election.")
+            node.leader_ip = None
+            await node.startElection()
+        
+        #Keep the network updated.
         # Get all pods
         ip_list = []
-        print("Making a DNS lookup to service")
         try:
             response = socket.getaddrinfo("bully-service", 8080, family=socket.AF_INET)
-            print("Get response from DNS")
             for result in response:
                 ip = result[-1][0]
                 ip_list.append(ip)
             ip_list = list(set(ip_list))
         except Exception as e:
             print(f"Error during DNS lookup: {e}")
-            continue
+
 
         # Remove own POD IP
         if POD_IP in ip_list:
             ip_list.remove(POD_IP)
-        print("Got %d other pod IPs" % len(ip_list))
 
         # Get IDs of other pods
         await asyncio.sleep(random.randint(1, 5))
@@ -123,30 +137,103 @@ async def run_bully():
             url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
             try:
                 async with aiohttp.ClientSession() as session:
-                    unique = False
-                    while(not unique):
-                            async with session.get(url) as resp:
-                                json_resp = await resp.json()
-                                other_ID = json_resp['pod_id']
-                                if other_ID == node.id:
-                                    print("I have the same ID as another node. Getting a new one. Current ID: ", other_ID)
-                                    node.id = random.randint(1, 100)
-                                    print("Got ID: ", node.id)
-                                other_pods[pod_ip] = other_ID
-                                unique = True
+                    async with session.get(url) as resp:
+                        json_resp = await resp.json()
+                        other_ID = json_resp['pod_id']
+                        if other_ID == node.id:
+                            node.id = random.randint(1, 100)
+                        other_pods[pod_ip] = other_ID
             except Exception as e:
                 print(f"Error contacting pod {pod_ip}: {e}")
-                continue
-            
+                
 
         # Update node's network
         node.network = other_pods
+        print(len(ip_list))
+        if(len(ip_list) == 0):
+            print("Uwaga the network is empty. Guess I'm the leader now.")
+            await node.setNewLeader()
 
-        # Start election
-        await node.startElection()
+        """
+        The below check is necessary when adding multiple new nodes 
+        to the network at once as sometimes the network is not updated
+        quickly enough and a false leader can be set (effectively having
+        two leaders.) If a leader node discovers a node with a higher id
+        it will start an election.
+        """
+        for n in node.network:
+            if (node.id < n) and LEADER_ID == node.id:
+                print("I'm a false leader. Starting election.")
+                node.startElection()
 
-        # Sleep before next iteration
-        await asyncio.sleep(10)
+    print("Exiting main loop")
+                
+
+    
+
+async def run_bully():
+    global LEADER_ID
+    global POD_ID
+    global POD_HOSTNAME
+    global LEADER_ID
+    global LEADER_IP
+    node = Node(POD_ID, LEADER_ID, LEADER_IP, POD_HOSTNAME)
+    print(f"My ID is: {POD_ID} and my hostname is {POD_HOSTNAME}")
+    print("Running bully algorithm")
+    await asyncio.sleep(5)  # Wait for everything to be set up
+
+    # Get all pods
+    ip_list = []
+    print("Making a DNS lookup to service")
+    try:
+        response = socket.getaddrinfo("bully-service", 8080, family=socket.AF_INET)
+        print("Get response from DNS")
+        for result in response:
+            ip = result[-1][0]
+            ip_list.append(ip)
+        ip_list = list(set(ip_list))
+    except Exception as e:
+        print(f"Error during DNS lookup: {e}")
+
+
+    # Remove own POD IP
+    if POD_IP in ip_list:
+        ip_list.remove(POD_IP)
+    print("Got %d other pod IPs" % len(ip_list))
+
+    # Get IDs of other pods
+    await asyncio.sleep(random.randint(1, 5))
+    other_pods = dict()
+    for pod_ip in ip_list:
+        endpoint = '/pod_id'
+        url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
+        try:
+            async with aiohttp.ClientSession() as session:
+                unique = False
+                while(not unique):
+                    async with session.get(url) as resp:
+                        json_resp = await resp.json()
+                        other_ID = json_resp['pod_id']
+                        if other_ID == node.id:
+                            print("I have the same ID as another node. Getting a new one. Current ID: ", other_ID)
+                            node.id = random.randint(1, 100)
+                            print("Got ID: ", node.id)
+                        other_pods[pod_ip] = other_ID
+                        unique = True
+        except Exception as e:
+            print(f"Error contacting pod {pod_ip}: {e}")
+            continue
+        
+
+    # Update node's network
+    node.network = other_pods
+
+    # Start election
+    await node.startElection()
+
+    #Allow the first election to finish so the leader id and ip is set.
+    await asyncio.sleep(5)
+    await main_loop(node) #It will never exit this loop xd
 
 # HTTP Handlers
 async def pod_id(request):
@@ -169,10 +256,12 @@ async def receive_election(request):
 
 async def receive_coordinator(request):
     global LEADER_ID
+    global LEADER_IP
     try:
         data = await request.json()
         LEADER_ID = data['leader_id']
         leader_hostname = data['leader_hostname']
+        LEADER_IP = data['leader_ip']
         print(f"New leader elected: {LEADER_ID}. It's hostname is: {leader_hostname}")
         return web.json_response({'status': 'acknowledged'})
     except Exception as e:
@@ -185,10 +274,13 @@ async def ping(request):
 async def background_tasks(app):
     # Ensure web server is running
     await asyncio.sleep(2)
-    task = asyncio.create_task(run_bully())
+    task1 = asyncio.create_task(run_bully())
     yield
-    #task.cancel()
-    await task
+    #task1.cancel()
+    await task1
+    #task2 =  asyncio.create_task(main_loop())
+    #yield
+    #await task2
 
 if __name__ == "__main__":
     app = web.Application()
