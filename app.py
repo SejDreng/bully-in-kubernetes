@@ -88,6 +88,8 @@ class Node():
 
 async def run_bully():
     global LEADER_ID
+    global POD_ID
+    global POD_HOSTNAME
     node = Node(POD_ID, LEADER_ID, POD_HOSTNAME)
     print(f"My ID is: {POD_ID} and my hostname is {POD_HOSTNAME}")
     while True:
@@ -121,12 +123,21 @@ async def run_bully():
             url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(url) as resp:
-                        json_resp = await resp.json()
-                        other_pods[pod_ip] = json_resp['pod_id']
+                    unique = False
+                    while(not unique):
+                            async with session.get(url) as resp:
+                                json_resp = await resp.json()
+                                other_ID = json_resp['pod_id']
+                                if other_ID == node.id:
+                                    print("I have the same ID as another node. Getting a new one. Current ID: ", other_ID)
+                                    node.id = random.randint(1, 100)
+                                    print("Got ID: ", node.id)
+                                other_pods[pod_ip] = other_ID
+                                unique = True
             except Exception as e:
                 print(f"Error contacting pod {pod_ip}: {e}")
                 continue
+            
 
         # Update node's network
         node.network = other_pods

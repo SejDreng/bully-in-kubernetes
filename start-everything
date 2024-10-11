@@ -8,4 +8,4 @@ docker build -t bully-app .
 kubectl apply -f k8s/headless-service.yaml
 kubectl apply -f k8s/deployment.yaml
 
-echo -e  "All done daddy \U0001F346 \U0001F4A6 \U0001F629"
+echo -e  "All done \U0001F682"
