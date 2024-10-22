@@ -43,11 +43,11 @@ async def run_bully():
         # Get ID's of other pods by sending a GET request to them
         await asyncio.sleep(random.randint(1, 5))
         for pod_ip in ip_list:
-            endpoint = '/pod_id'
-            url = 'http://' + str(pod_ip) + ':' + str(WEB_PORT) + endpoint
-            response = requests.get(url)
-            print("Got response: ", response)
-            other_pods[str(pod_ip)] = response.json()
+                endpoint = '/pod_id'
+                url = 'http://' + str(pod_ip) + ':' + str(WEB_PORT) + endpoint
+                response = requests.get(url)
+                print("Got response: ", response)
+                other_pods[str(pod_ip)] = response.json()
             
         # Other pods in network
         print("Other pods:")
@@ -56,31 +56,41 @@ async def run_bully():
         if not leader_alive:
             HIGHER_REPONSE = False
             # Start election
-            start_election()
+            #await start_election()
+            await start_election()
             await asyncio.sleep(MAX_TIMEOUT)
             if not HIGHER_REPONSE:
                 #I'm the leader.
                 pass
 
 
-        # Sleep a bit, then repeat
+        # Sleep cock repeat
+        #"Min morgen rutine:
+        #Vågn op
+        #Lav en lort
+        #spis
+        #stå ud af sengen
+        #lav morgenmad"
+        # - valder hvid
+        # Ja videnskab kælling!
         await asyncio.sleep(2)
     
 
 
-def start_election():
-    return True
+async def start_election():
     global other_pods
     print("Starting election")
     print("I got the other pods\n", other_pods)
-    for pod_ip in other_pods.keys():
+    for pod_ip, pod_id in other_pods.items():
         print("checking pod: ", pod_ip)
-        pod_id = other_pods[str(pod_ip)]
+        #pod_id = other_pods[str(pod_ip)]
         if pod_id > POD_ID:
-            print("contacting pod: ", pod_id)
+            print("contacting pod: ", pod_ip)
             endpoint = '/receive_election'
             url = 'http://' + str(pod_ip) + ':' + str(WEB_PORT) + endpoint
+            await asyncio.sleep(random.randint(0, 100)*0.01)
             requests.post(url, json={'pod_ip' : POD_IP})
+            await asyncio.sleep(1)
             print("I've sent an election message.")
 
 
@@ -90,20 +100,30 @@ async def pod_id(request):
     
 #POST /receive_answer
 async def receive_answer(request):
-    resp_id = request["pod_id"]
-    print("Got a \"OK\" reponse from ", resp_id)
+    return web.json_response(text="OK")
+    global LEADER
+    global HIGHER_REPONSE
+    print("Sut den Simon")
+    data = await request.json()
+    other_id = data['pod_id']
+    print("Got a \"OK\" reponse from ", other_id)
     print("I'm not the leader")
     LEADER = False
     HIGHER_REPONSE = True
     
 #POST /receive_election
 async def receive_election(request):
+    return web.json_response(text="OK")
     #request = callee pod
-    resp_ip = request["pod_ip"]
-    endpoint = "/recieve_answer"
+    print("Got reponse ", request)
+    data = await request.json()
+    print(data)
+    resp_ip = data["pod_ip"]
+    endpoint = "/receive_answer"
     url = 'http://' + str(resp_ip) + ':' + str(WEB_PORT) + endpoint
-    request.post(url, json={"pod_id" : POD_ID})
-    start_election()
+    requests.post(url, json={"pod_id" : POD_ID})
+    #start_election()
+    return web.HTTPOk
     
     
 #POST /receive_coordinator
