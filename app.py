@@ -10,17 +10,14 @@ POD_IP = str(os.environ['POD_IP'])
 #POD_IP = socket.gethostbyname(socket.gethostname())
 WEB_PORT = int(os.environ['WEB_PORT'])
 #WEB_PORT = 8080
-POD_ID = random.randint(0, 100)
-HIGHER_REPONSE = False
+POD_ID = random.randint(0, 10000)
+HIGHER_RESPONSE = False
 MAX_TIMEOUT = 5
 other_pods = dict()
 LEADER_IP = None
 LEADER_ID = None
 LEADER_ALIVE = False
 
-async def setup_k8s():
-    # If you need to do setup of Kubernetes, i.e. if using Kubernetes Python client
-	print("K8S setup completed")
  
 async def run_bully():
     global other_pods
@@ -29,10 +26,12 @@ async def run_bully():
     global POD_ID
     global POD_IP
     global LEADER_ALIVE
-    global HIGHER_REPONSE
+    global HIGHER_RESPONSE
     while True:
+        #Useful debugging information
         print("Running bully")
         print("My id is:", POD_ID)
+        print("My ip is:", POD_IP)
         if LEADER_IP != None: print("My leader is ", LEADER_ID)
         await asyncio.sleep(5) # wait for everything to be up
         
@@ -45,12 +44,16 @@ async def run_bully():
         for result in response:
             ip_list.append(result[-1][0])
         ip_list = list(set(ip_list))
+
         
-        # Remove own POD ip from the list of pods
-        ip_list.remove(POD_IP)
+        # Remove own POD ip from the list of pods 
+        # (If it exists. When scaling it takes a short while for the IP to be added.)
+        if POD_IP in ip_list: ip_list.remove(POD_IP)
         print("Got %d other pod ip's" % (len(ip_list)))
+
         
         # Get ID's of other pods by sending a GET request to them
+        other_pods.clear()
         async with aiohttp.ClientSession() as session:
             for pod_ip in ip_list:
                 endpoint = '/pod_id'
@@ -60,6 +63,9 @@ async def run_bully():
                         if response.status == 200:
                             pod_data = await response.json()
                             print("Got response: ", pod_data)
+                            if pod_data == POD_ID:
+                                print("Got an ID collision. Giving myself a new ID")
+                                POD_ID = random.randint(0,10000)
                             other_pods[str(pod_ip)] = pod_data
                 except Exception as e:
                     print(f"Failed to get pod_id from {pod_ip}: {e}")
@@ -68,6 +74,7 @@ async def run_bully():
         print("Other pods:")
         print(other_pods)
 
+        #If the pods is not the leader it should check if the leader is still alive.
         if LEADER_IP != None and LEADER_IP != POD_IP:
             async with aiohttp.ClientSession() as session:
                 endpoint = '/pod_id'
@@ -81,20 +88,23 @@ async def run_bully():
                     print("Leader is not alive")
                     LEADER_ALIVE = False
 
-        
+        #If the leader is not alive a new election should be started.
         if not LEADER_ALIVE:
-            HIGHER_REPONSE = False
+            HIGHER_RESPONSE = False
             # Start election
-            #await start_election()
             await start_election()
             await asyncio.sleep(MAX_TIMEOUT)
-            if not HIGHER_REPONSE:
+            
+            #If we to this point and HIGHER_RESPONSE is False it means we didn't get
+            #any acknowlegdements (OKs) back and therefore we are the leader.
+            if not HIGHER_RESPONSE:
                 #I'm the leader.
                 LEADER_ID = POD_ID
                 LEADER_IP = POD_IP
+                #Contact all the other pods and let them know we are the new leader.
                 async with aiohttp.ClientSession() as session:
+                    print(f"I'm to become the leader.")
                     for pod_ip, _ in other_pods.items():
-                        print(f"Contacting pod: {pod_ip}")
                         endpoint = '/receive_coordinator'
                         url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
                         try:
@@ -111,11 +121,11 @@ async def run_bully():
         await asyncio.sleep(2)
     
 
-
+#Function to start an alection- Sends a post with receive election to all pods in the
+#network with a higher ID than the current pod.
 async def start_election():
     global other_pods
     print("Starting election")
-    print("I got the other pods\n", other_pods)
     async with aiohttp.ClientSession() as session:
         for pod_ip, pod_id in other_pods.items():
             print(f"Checking pod: {pod_ip} with pod_id {pod_id}")
@@ -125,7 +135,7 @@ async def start_election():
                 url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
                 try:
                     await asyncio.sleep(random.uniform(0, 1))  # Simulating random delay
-                    async with session.post(url, json={'pod_ip': POD_IP}) as response:
+                    async with session.post(url, json={'pod_ip': POD_IP, 'pod_id': POD_ID}) as response:
                         if response.status == 200:
                             print("I've sent an election message.")
                 except Exception as e:
@@ -137,24 +147,27 @@ async def pod_id(request):
     return web.json_response(POD_ID)
     
 #POST /receive_answer
+#This function lets a pod know that it got it's election message and that it's alive.
 async def receive_answer(request):
-    global HIGHER_REPONSE
-    print("Received an answer")
+    global HIGHER_RESPONSE
     data = await request.json()
     other_id = data['pod_id']
     print(f"Got an 'OK' response from {other_id}")
     print("I'm not the leader")
-    HIGHER_REPONSE = True
+    HIGHER_RESPONSE = True
     return web.json_response(text="OK")
     
 #POST /receive_election
+#This function lets a pod now an election has been started and they should repond OK
+#So the sender know's they're alive and doesn't become the leader.
 async def receive_election(request):
     global LEADER_ALIVE
     LEADER_ALIVE = False
     print("Received election message")
     data = await request.json()
     resp_ip = data["pod_ip"]
-    print(f"Election started by {resp_ip}")
+    resp_id = data['pod_id']
+    print(f"Election started by {resp_id}")
     # Respond with an OK message
     endpoint = "/receive_answer"
     url = f'http://{resp_ip}:{WEB_PORT}{endpoint}'
@@ -164,6 +177,7 @@ async def receive_election(request):
     
     
 #POST /receive_coordinator
+#This function lets a pod know who the new leader is.
 async def receive_coordinator(request):
     global LEADER_IP
     global LEADER_ID
@@ -175,7 +189,6 @@ async def receive_coordinator(request):
 
 
 async def background_tasks(app):
-    print("pik1")
     task = asyncio.create_task(run_bully())
 
     try:
