@@ -4,6 +4,7 @@ import os
 import socket
 import random
 import aiohttp
+import time
 import requests
 
 POD_IP = str(os.environ['POD_IP'])
@@ -27,7 +28,10 @@ async def run_bully():
     global POD_IP
     global LEADER_ALIVE
     global HIGHER_RESPONSE
+    time_last_election = time.time() + 30
     while True:
+        print("Time is ", time.time())
+        print("pik", time.time() - time_last_election)
         #Useful debugging information
         print("Running bully")
         print("My id is:", POD_ID)
@@ -89,9 +93,12 @@ async def run_bully():
                     LEADER_ALIVE = False
 
         #If the leader is not alive a new election should be started.
-        if not LEADER_ALIVE:
+        time_diff = time.time() - time_last_election
+        if not LEADER_ALIVE and time_diff > 30:
             HIGHER_RESPONSE = False
             # Start election
+            time_last_election = time.time()
+            print("Time is ", time_last_election)
             await start_election()
             await asyncio.sleep(MAX_TIMEOUT)
             
