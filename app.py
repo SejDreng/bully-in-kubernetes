@@ -30,7 +30,6 @@ async def run_bully():
     global HIGHER_RESPONSE
     time_last_election = time.time() - 30
     while True:
-        print("time since last election", time.time() - time_last_election)
         #Useful debugging information
         print("Running bully")
         print("My id is:", POD_ID)
@@ -131,6 +130,8 @@ async def run_bully():
 #network with a higher ID than the current pod.
 async def start_election():
     global other_pods
+    other_pods = {k: v for k, v in sorted(other_pods.items(), key=lambda item: item[1], reverse=True)}
+    print("Sorted:\n",other_pods)
     print("Starting election")
     async with aiohttp.ClientSession() as session:
         for pod_ip, pod_id in other_pods.items():
