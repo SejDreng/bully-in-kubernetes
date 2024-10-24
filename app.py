@@ -28,7 +28,7 @@ async def run_bully():
     global POD_IP
     global LEADER_ALIVE
     global HIGHER_RESPONSE
-    time_last_election = time.time() + 30
+    time_last_election = time.time() - 30
     while True:
         #Useful debugging information
         print("Running bully")
