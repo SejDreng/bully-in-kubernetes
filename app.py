@@ -30,8 +30,6 @@ async def run_bully():
     global HIGHER_RESPONSE
     time_last_election = time.time() + 30
     while True:
-        print("Time is ", time.time())
-        print("pik", time.time() - time_last_election)
         #Useful debugging information
         print("Running bully")
         print("My id is:", POD_ID)
