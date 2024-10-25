@@ -18,9 +18,10 @@ other_pods = dict()
 LEADER_IP = None
 LEADER_ID = None
 LEADER_ALIVE = False
-
+MESSAGE_COUNT = 0
  
 async def run_bully():
+    global MESSAGE_COUNT
     global other_pods
     global LEADER_IP
     global LEADER_ID
@@ -34,7 +35,10 @@ async def run_bully():
         print("Running bully")
         print("My id is:", POD_ID)
         print("My ip is:", POD_IP)
-        if LEADER_IP != None: print("My leader is ", LEADER_ID)
+        if LEADER_IP != None:
+            print("My leader is ", LEADER_ID)
+            print("Final message count: ", MESSAGE_COUNT)
+            return
         await asyncio.sleep(5) # wait for everything to be up
         
         # Get all pods doing bully
@@ -83,6 +87,7 @@ async def run_bully():
                 url = f'http://{LEADER_IP}:{WEB_PORT}{endpoint}'
                 try:
                     async with session.get(url) as response:
+                        MESSAGE_COUNT += 1
                         if response.status == 200:
                             print("Leader is still alive")
                             LEADER_ALIVE = True
@@ -113,6 +118,7 @@ async def run_bully():
                         endpoint = '/receive_coordinator'
                         url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
                         try:
+                            MESSAGE_COUNT += 1
                             await asyncio.sleep(random.uniform(0, 1))  # Simulating random delay
                             async with session.post(url, json={'leader_ip': POD_IP, 'leader_id': POD_ID}) as response:
                                 if response.status == 200:
@@ -129,6 +135,7 @@ async def run_bully():
 #Function to start an alection- Sends a post with receive election to all pods in the
 #network with a higher ID than the current pod.
 async def start_election():
+    global MESSAGE_COUNT
     global other_pods
     print("Starting election")
     async with aiohttp.ClientSession() as session:
@@ -139,6 +146,7 @@ async def start_election():
                 endpoint = '/receive_election'
                 url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
                 try:
+                    MESSAGE_COUNT += 1
                     await asyncio.sleep(random.uniform(0, 1))  # Simulating random delay
                     async with session.post(url, json={'pod_ip': POD_IP, 'pod_id': POD_ID}) as response:
                         if response.status == 200:

@@ -1,0 +1,23 @@
+
+#!/bin/bash
+
+pods=$(kubectl get pods -n "default" -o jsonpath='{.items[*].metadata.name}')
+total_sum=0
+# Loop through each pod in the namespace
+for pod in $pods; do
+#echo "  Pod: $pod"
+
+# Get logs for each container in the pod (including init and sidecar containers)
+containers=$(kubectl get pod "$pod" -n "$default" -o jsonpath='{.spec.containers[*].name}')
+for container in $containers; do
+    #echo "    Container: $container"
+    log_counts=$(kubectl logs "$pod"| \
+      grep "Final message count: " | \
+      sed 's/.*Final message count: //g')
+    echo
+    for count in $log_counts; do
+        total_sum=$((total_sum + count))
+      done
+done
+done
+echo "$total_sum" > "out-file.txt"

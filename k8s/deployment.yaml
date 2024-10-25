@@ -6,7 +6,7 @@ spec:
   selector:
     matchLabels:
       app: bully-app
-  replicas: 5    
+  replicas: 5
   template:
     metadata:
       name: bully-app
