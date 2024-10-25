@@ -21,6 +21,8 @@ LEADER_ALIVE = False
 MESSAGE_COUNT = 0
  
 async def run_bully():
+    max_iter = 100
+    curr_iter = 0
     global MESSAGE_COUNT
     global other_pods
     global LEADER_IP
@@ -35,7 +37,10 @@ async def run_bully():
         print("Running bully")
         print("My id is:", POD_ID)
         print("My ip is:", POD_IP)
-        if LEADER_IP != None: print("My leader is ", LEADER_ID)
+        if LEADER_IP != None:
+            print("My leader is ", LEADER_ID)
+            print("The message count is :", MESSAGE_COUNT)
+            return
         await asyncio.sleep(5) # wait for everything to be up
         
         # Get all pods doing bully
@@ -114,6 +119,7 @@ async def run_bully():
                         endpoint = '/receive_coordinator'
                         url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
                         try:
+                            MESSAGE_COUNT += 1
                             await asyncio.sleep(random.uniform(0, 1))  # Simulating random delay
                             async with session.post(url, json={'leader_ip': POD_IP, 'leader_id': POD_ID}) as response:
                                 if response.status == 200:
@@ -131,7 +137,6 @@ async def run_bully():
 #network with a higher ID than the current pod.
 async def start_election():
     global MESSAGE_COUNT
-    MESSAGE_COUNT += 1
     
     global other_pods
     other_pods = {k: v for k, v in sorted(other_pods.items(), key=lambda item: item[1], reverse=True)}
@@ -141,10 +146,13 @@ async def start_election():
         for pod_ip, pod_id in other_pods.items():
             print(f"Checking pod: {pod_ip} with pod_id {pod_id}")
             if pod_id > POD_ID:
+
                 print(f"Contacting pod: {pod_ip}")
                 endpoint = '/receive_election'
                 url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
                 try:
+
+                    MESSAGE_COUNT += 1
                     await asyncio.sleep(random.uniform(0, 1))  # Simulating random delay
                     async with session.post(url, json={'pod_ip': POD_IP, 'pod_id': POD_ID}) as response:
                         if response.status == 200:
@@ -163,9 +171,6 @@ async def pod_id(request):
 #POST /receive_answer
 #This function lets a pod know that it got it's election message and that it's alive.
 async def receive_answer(request):
-    global MESSAGE_COUNT
-    MESSAGE_COUNT += 1
-
     global HIGHER_RESPONSE
     data = await request.json()
     other_id = data['pod_id']
@@ -178,8 +183,6 @@ async def receive_answer(request):
 #This function lets a pod now an election has been started and they should repond OK
 #So the sender know's they're alive and doesn't become the leader.
 async def receive_election(request):
-    global MESSAGE_COUNT
-    MESSAGE_COUNT += 1
 
     global LEADER_ALIVE
     LEADER_ALIVE = False
@@ -199,8 +202,6 @@ async def receive_election(request):
 #POST /receive_coordinator
 #This function lets a pod know who the new leader is.
 async def receive_coordinator(request):
-    global MESSAGE_COUNT
-    MESSAGE_COUNT += 1
 
     global LEADER_IP
     global LEADER_ID
