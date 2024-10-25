@@ -7,10 +7,10 @@ import aiohttp
 import time
 import requests
 
-POD_IP = str(os.environ['POD_IP'])
-#POD_IP = socket.gethostbyname(socket.gethostname())
-WEB_PORT = int(os.environ['WEB_PORT'])
-#WEB_PORT = 8080
+#POD_IP = str(os.environ['POD_IP'])
+POD_IP = socket.gethostbyname(socket.gethostname())
+#WEB_PORT = int(os.environ['WEB_PORT'])
+WEB_PORT = 8080
 POD_ID = random.randint(0, 10000)
 HIGHER_RESPONSE = False
 MAX_TIMEOUT = 5
