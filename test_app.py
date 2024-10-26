@@ -58,7 +58,9 @@ class Test(AioHTTPTestCase):
         self.assertEqual(text, "OK", "Expected 'OK' response from /receive_election")
 
 
-        # Now check the state of LEADER_ALIVE to ensure it's set to False
+        # Now check the state of LEADER_ALIVE to ensure it's set to True
+        # Because if we recieve an election that node must be the new leader and it's
+        # Set to true when calling set_leader()
         alive = await self.client.get('/leader_alive')
         assert alive.status == 200
         state_data = await alive.json()
