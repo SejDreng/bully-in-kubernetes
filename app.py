@@ -39,8 +39,14 @@ async def run_bully():
         print("My ip is:", POD_IP)
         if LEADER_IP != None:
             print("My leader is ", LEADER_ID)
-            print("The message count is :", MESSAGE_COUNT)
-            return
+            other_pods = {k: v for k, v in sorted(other_pods.items(), key=lambda item: item[1], reverse=True)}
+            _, first_value = next(iter(other_pods.items()))
+            if (LEADER_ID!=first_value and LEADER_ID == POD_ID):
+                print("Final message count: ", MESSAGE_COUNT)
+                return
+            if (LEADER_ID==first_value):
+                print("Final message count: ", MESSAGE_COUNT)
+                return
         await asyncio.sleep(5) # wait for everything to be up
         
         # Get all pods doing bully
