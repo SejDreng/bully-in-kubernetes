@@ -102,22 +102,7 @@ async def run_bully():
             #If we to this point and HIGHER_RESPONSE is False it means we didn't get
             #any acknowlegdements (OKs) back and therefore we are the leader.
             if not HIGHER_RESPONSE:
-                #I'm the leader.
-                LEADER_ID = POD_ID
-                LEADER_IP = POD_IP
-                #Contact all the other pods and let them know we are the new leader.
-                async with aiohttp.ClientSession() as session:
-                    print(f"I'm to become the leader.")
-                    for pod_ip, _ in other_pods.items():
-                        endpoint = '/receive_coordinator'
-                        url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
-                        try:
-                            await asyncio.sleep(random.uniform(0, 1))  # Simulating random delay
-                            async with session.post(url, json={'leader_ip': POD_IP, 'leader_id': POD_ID}) as response:
-                                if response.status == 200:
-                                    print("Sent leader coordinator message.")
-                        except Exception as e:
-                            print(f"Failed to contact {pod_ip}: {e}")
+                await set_leader()
                     
                 
                 
@@ -127,7 +112,6 @@ async def run_bully():
 #Function to start an alection- Sends a post with receive election to all pods in the
 #network with a higher ID than the current pod.
 async def start_election():
-    
     global other_pods
     other_pods = {k: v for k, v in sorted(other_pods.items(), key=lambda item: item[1], reverse=True)}
     print("Sorted:\n",other_pods)
@@ -152,6 +136,31 @@ async def start_election():
                 except Exception as e:
                     print(f"Failed to contact {pod_ip}: {e}")
 
+async def set_leader():
+    global LEADER_ID
+    global LEADER_IP
+    global LEADER_ALIVE
+    global other_pods
+
+    
+    #Contact all the other pods and let them know we are the new leader.
+    if POD_ID != LEADER_ID:
+        #I'm the leader.
+        LEADER_ID = POD_ID
+        LEADER_IP = POD_IP
+        LEADER_ALIVE = True
+        async with aiohttp.ClientSession() as session:
+            print(f"I'm to become the leader.")
+            for pod_ip, _ in other_pods.items():
+                endpoint = '/receive_coordinator'
+                url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
+                try:
+                    await asyncio.sleep(random.uniform(0, 1))  # Simulating random delay
+                    async with session.post(url, json={'leader_ip': POD_IP, 'leader_id': POD_ID}) as response:
+                        if response.status == 200:
+                            print("Sent leader coordinator message.")
+                except Exception as e:
+                    print(f"Failed to contact {pod_ip}: {e}")
 
 #GET /pod_id
 async def pod_id(request):
@@ -187,6 +196,8 @@ async def receive_election(request):
             await session.post(url, json={"pod_id": POD_ID})
     except Exception as e:
         print("Failed with:", e)
+    
+    await set_leader()
     return web.json_response(text="OK")
     
     
