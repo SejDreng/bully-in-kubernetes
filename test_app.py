@@ -1,59 +1,6 @@
-# import pytest
-# from aiohttp import web
-# from unittest.mock import patch
-# from app import receive_election, receive_answer, receive_coordinator, pod_id
-
-# @pytest.fixture
-# def test_app():
-#     app = web.Application()
-#     app.router.add_get('/pod_id', pod_id)
-#     app.router.add_post('/receive_answer', receive_answer)
-#     app.router.add_post('/receive_election', receive_election)
-#     app.router.add_post('/receive_coordinator', receive_coordinator)
-#     return app
-
-# @pytest.mark.asyncio
-# async def test_receive_election(test_app, aiohttp_client):
-#     client = await aiohttp_client(test_app)
-#     # Patch LEADER_ALIVE to simulate election behavior
-#     with patch('app.LEADER_ALIVE', False):
-#         response = await client.post('/receive_election', json={'pod_ip': '127.0.0.1', 'pod_id': 200})
-#         assert response.status == 200
-#         response_text = await response.text()
-#         assert response_text == "OK"
-#         test_app['LEADER_ALIVE']
-#         # After receiving an election message, LEADER_ALIVE should be False
-#         assert test_app['LEADER_ALIVE'] == False
-
-# @pytest.mark.asyncio
-# async def test_receive_answer(test_app, aiohttp_client):
-#     client = await aiohttp_client(test_app)
-#     # Patch HIGHER_RESPONSE to initially be False
-#     with patch('app.HIGHER_RESPONSE', False):
-#         response = await client.post('/receive_answer', json={'pod_id': 200})
-#         assert response.status == 200
-#         response_text = await response.text()
-#         assert response_text == "OK"
-#         # After receiving an answer, HIGHER_RESPONSE should be set to True
-#         assert test_app.HIGHER_RESPONSE is True
-
-# @pytest.mark.asyncio
-# async def test_receive_coordinator(test_app, aiohttp_client):
-#     client = await aiohttp_client(test_app)
-#     # Patch LEADER_ID and LEADER_IP for initial setup
-#     with patch('app.LEADER_ID', None), patch('app.LEADER_IP', None):
-#         response = await client.post('/receive_coordinator', json={'leader_ip': '127.0.0.1', 'leader_id': 300})
-#         assert response.status == 200
-#         response_text = await response.text()
-#         assert response_text == "OK"
-#         # Verify that LEADER_ID and LEADER_IP have been updated with the new leader's information
-#         assert test_app.LEADER_ID == 300
-#         assert test_app.LEADER_IP == '127.0.0.1'
-
-import asyncio
 import unittest
 from aiohttp import web, ClientSession
-from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
+from aiohttp.test_utils import AioHTTPTestCase
 from unittest.mock import patch
 import app as appp
 import socket
@@ -82,7 +29,11 @@ class TestReceiveAnswer(AioHTTPTestCase):
     
     #@unittest_run_loop
     async def test_receive_answer_sets_higher_response(self):
-        # Initial state should be False
+        #Check that higher reponse is false when we begin.
+        higher_init = await self.client.get('/higher_response')
+        assert higher_init.status == 200
+        state_data_init = await higher_init.json()
+        self.assertFalse(state_data_init["higher_response"], "Expected HIGHER_RESPONSE to be True after /receive_answer call")
 
         # Define test data
         test_data = {'pod_id': 1234}
@@ -111,13 +62,6 @@ class TestReceiveAnswer(AioHTTPTestCase):
         election_data = {'pod_ip': str(ip), 'pod_id': 1234}
         
 
-        #async with ClientSession() as session:
-        #    async with session.post('/receive_election', json=election_data) as response_state:
-        #        assert response_state.status == 200
-        #        text = await response_state.text()
-        #        self.assertEqual(text, "OK", "Expected 'OK' response from /receive_election")
-
-
         # Send POST request to /receive_election endpoint
         resp = await self.client.post('/receive_election', json=election_data)
         
@@ -135,6 +79,13 @@ class TestReceiveAnswer(AioHTTPTestCase):
 
 
     async def test_receive_coordinator_updates_leader(self):
+        #Check that initially there isn't a leader.
+        leader = await self.client.get('/leader')
+        assert leader.status == 200
+        state_data = await leader.json()
+        self.assertEqual(state_data["leader_ip"], None, "Expected LEADER_IP to be None")
+        self.assertEqual(state_data["leader_id"], None, "Expected LEADER_ID to be None")
+
         # Define test data for the new leader
         new_leader_data = {'leader_ip': '192.168.1.1', 'leader_id': 4321}
 
@@ -146,6 +97,7 @@ class TestReceiveAnswer(AioHTTPTestCase):
         text = await resp.text()
         self.assertEqual(text, "OK", "Expected 'OK' response from /receive_coordinator")
 
+        #Check that the leader has been set correctly.
         leader = await self.client.get('/leader')
         assert leader.status == 200
         state_data = await leader.json()
