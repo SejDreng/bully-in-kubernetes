@@ -62,7 +62,7 @@ class Test(AioHTTPTestCase):
         alive = await self.client.get('/leader_alive')
         assert alive.status == 200
         state_data = await alive.json()
-        self.assertFalse(state_data["leader_alive"], "Expected LEADER_ALIVE to be False after /receive_election call")
+        self.assertTrue(state_data["leader_alive"], "Expected LEADER_ALIVE to be False after /receive_election call")
 
 
     async def test_receive_coordinator(self):

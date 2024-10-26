@@ -142,7 +142,6 @@ async def set_leader():
     global LEADER_ALIVE
     global other_pods
 
-    
     #Contact all the other pods and let them know we are the new leader.
     if POD_ID != LEADER_ID:
         #I'm the leader.
