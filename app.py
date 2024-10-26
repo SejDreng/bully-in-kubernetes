@@ -20,7 +20,6 @@ LEADER_ID = None
 LEADER_ALIVE = False
  
 async def run_bully():
-    global MESSAGE_COUNT
     global other_pods
     global LEADER_IP
     global LEADER_ID
@@ -113,7 +112,6 @@ async def run_bully():
                         endpoint = '/receive_coordinator'
                         url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
                         try:
-                            MESSAGE_COUNT += 1
                             await asyncio.sleep(random.uniform(0, 1))  # Simulating random delay
                             async with session.post(url, json={'leader_ip': POD_IP, 'leader_id': POD_ID}) as response:
                                 if response.status == 200:
@@ -123,14 +121,12 @@ async def run_bully():
                     
                 
                 
-        print("Total messages this pod: ", MESSAGE_COUNT)
         await asyncio.sleep(2)
     
 
 #Function to start an alection- Sends a post with receive election to all pods in the
 #network with a higher ID than the current pod.
 async def start_election():
-    global MESSAGE_COUNT
     
     global other_pods
     other_pods = {k: v for k, v in sorted(other_pods.items(), key=lambda item: item[1], reverse=True)}
@@ -146,7 +142,6 @@ async def start_election():
                 url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
                 try:
 
-                    MESSAGE_COUNT += 1
                     await asyncio.sleep(random.uniform(0, 1))  # Simulating random delay
                     async with session.post(url, json={'pod_ip': POD_IP, 'pod_id': POD_ID}) as response:
                         if response.status == 200:

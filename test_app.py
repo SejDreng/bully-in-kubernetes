@@ -2,33 +2,24 @@ import unittest
 from aiohttp import web, ClientSession
 from aiohttp.test_utils import AioHTTPTestCase
 from unittest.mock import patch
-import app as appp
+import app as bully
 import socket
 
-# Assuming the main app module is named 'bully_algorithm'
-# from bully_algorithm import app, receive_answer, HIGHER_RESPONSE, POD_ID
-
-# We need to import or define receive_answer and the global variables used here:
-# Since HIGHER_RESPONSE is a global, we need to reset it for each test.
-
 # Define test class
-class TestReceiveAnswer(AioHTTPTestCase):
-
+class Test(AioHTTPTestCase):
     async def get_application(self):
         # Return the application that should be tested
         app = web.Application()
-        app.router.add_get('/pod_id', appp.pod_id)
-        app.router.add_post('/receive_answer', appp.receive_answer)
-        app.router.add_post('/receive_election', appp.receive_election)
-        app.router.add_post('/receive_coordinator', appp.receive_coordinator)
-        app.router.add_get('/higher_response', appp.get_higher_response)
-        app.router.add_get('/leader_alive', appp.get_leader_alive) 
-        app.router.add_get('/leader', appp.get_leader) 
+        app.router.add_get('/pod_id', bully.pod_id)
+        app.router.add_post('/receive_answer', bully.receive_answer)
+        app.router.add_post('/receive_election', bully.receive_election)
+        app.router.add_post('/receive_coordinator', bully.receive_coordinator)
+        app.router.add_get('/higher_response', bully.get_higher_response)
+        app.router.add_get('/leader_alive', bully.get_leader_alive) 
+        app.router.add_get('/leader', bully.get_leader) 
         return app
-
     
-    #@unittest_run_loop
-    async def test_receive_answer_sets_higher_response(self):
+    async def test_receive_answer(self):
         #Check that higher reponse is false when we begin.
         higher_init = await self.client.get('/higher_response')
         assert higher_init.status == 200
@@ -47,21 +38,17 @@ class TestReceiveAnswer(AioHTTPTestCase):
         self.assertEqual(text, "OK", "Expected 'OK' response from /receive_answer")
 
         # Check the state of HIGHER_RESPONSE on the pod
-
-
         higher = await self.client.get('/higher_response')
         assert higher.status == 200
         state_data = await higher.json()
         self.assertTrue(state_data["higher_response"], "Expected HIGHER_RESPONSE to be True after /receive_answer call")
 
           
-    #@unittest_run_loop
     async def test_receive_election(self):
         # Define test data for election
         ip = socket.gethostbyname(socket.gethostname())
         election_data = {'pod_ip': str(ip), 'pod_id': 1234}
         
-
         # Send POST request to /receive_election endpoint
         resp = await self.client.post('/receive_election', json=election_data)
         
@@ -78,7 +65,7 @@ class TestReceiveAnswer(AioHTTPTestCase):
         self.assertFalse(state_data["leader_alive"], "Expected LEADER_ALIVE to be False after /receive_election call")
 
 
-    async def test_receive_coordinator_updates_leader(self):
+    async def test_receive_coordinator(self):
         #Check that initially there isn't a leader.
         leader = await self.client.get('/leader')
         assert leader.status == 200
