@@ -127,30 +127,23 @@ async def run_bully():
 #Function to start an alection- Sends a post with receive election to all pods in the
 #network with a higher ID than the current pod.
 async def start_election():
-    
     global other_pods
-    other_pods = {k: v for k, v in sorted(other_pods.items(), key=lambda item: item[1], reverse=True)}
-    print("Sorted:\n",other_pods)
     print("Starting election")
     async with aiohttp.ClientSession() as session:
         for pod_ip, pod_id in other_pods.items():
             print(f"Checking pod: {pod_ip} with pod_id {pod_id}")
             if pod_id > POD_ID:
-
                 print(f"Contacting pod: {pod_ip}")
                 endpoint = '/receive_election'
                 url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
                 try:
-
                     await asyncio.sleep(random.uniform(0, 1))  # Simulating random delay
                     async with session.post(url, json={'pod_ip': POD_IP, 'pod_id': POD_ID}) as response:
                         if response.status == 200:
                             print("I've sent an election message.")
-                    await asyncio.sleep(1)  # Sleep one second to wait for reponse.
-                    if(HIGHER_RESPONSE):
-                        return
                 except Exception as e:
                     print(f"Failed to contact {pod_ip}: {e}")
+
 
 
 #GET /pod_id
