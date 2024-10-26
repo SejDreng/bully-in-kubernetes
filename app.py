@@ -18,11 +18,8 @@ other_pods = dict()
 LEADER_IP = None
 LEADER_ID = None
 LEADER_ALIVE = False
-MESSAGE_COUNT = 0
  
 async def run_bully():
-    max_iter = 100
-    curr_iter = 0
     global MESSAGE_COUNT
     global other_pods
     global LEADER_IP
@@ -37,10 +34,7 @@ async def run_bully():
         print("Running bully")
         print("My id is:", POD_ID)
         print("My ip is:", POD_IP)
-        if LEADER_IP != None:
-            print("My leader is ", LEADER_ID)
-            print("The message count is :", MESSAGE_COUNT)
-            return
+        if LEADER_IP != None: print("My leader is ", LEADER_ID)
         await asyncio.sleep(5) # wait for everything to be up
         
         # Get all pods doing bully
@@ -193,11 +187,11 @@ async def receive_election(request):
     # Respond with an OK message
     endpoint = "/receive_answer"
     url = f'http://{resp_ip}:{WEB_PORT}{endpoint}'
-    #try:
-    #    async with aiohttp.ClientSession() as session:
-    #        await session.post(url, json={"pod_id": POD_ID})
-    #except Exception as e:
-    #    print("Failed with:", e)
+    try:
+        async with aiohttp.ClientSession() as session:
+            await session.post(url, json={"pod_id": POD_ID})
+    except Exception as e:
+        print("Failed with:", e)
     return web.json_response(text="OK")
     
     
@@ -243,15 +237,6 @@ async def background_tasks(app):
             await task
         except asyncio.CancelledError:
             print("Background task cancelled")
-    """
-    print("pik2")
-    yield
-    print("penis")
-    #task.cancel()
-    print("pik3")
-    await task
-    print("pik4")
-    """
 
 if __name__ == "__main__":
     app = web.Application()
