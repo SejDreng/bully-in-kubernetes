@@ -180,6 +180,7 @@ async def receive_election(request):
             await session.post(url, json={"pod_id": POD_ID})
     except Exception as e:
         print("Failed with:", e)
+    await start_election()
     return web.json_response(text="OK")
     
     
