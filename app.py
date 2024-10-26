@@ -7,10 +7,10 @@ import aiohttp
 import time
 import requests
 
-POD_IP = str(os.environ['POD_IP'])
-#POD_IP = socket.gethostbyname(socket.gethostname())
-WEB_PORT = int(os.environ['WEB_PORT'])
-#WEB_PORT = 8080
+#POD_IP = str(os.environ['POD_IP'])
+POD_IP = socket.gethostbyname(socket.gethostname())
+#WEB_PORT = int(os.environ['WEB_PORT'])
+WEB_PORT = 8080
 POD_ID = random.randint(0, 10000)
 HIGHER_RESPONSE = False
 MAX_TIMEOUT = 5
@@ -18,12 +18,8 @@ other_pods = dict()
 LEADER_IP = None
 LEADER_ID = None
 LEADER_ALIVE = False
-MESSAGE_COUNT = 0
  
 async def run_bully():
-    max_iter = 100
-    curr_iter = 0
-    global MESSAGE_COUNT
     global other_pods
     global LEADER_IP
     global LEADER_ID
@@ -37,16 +33,7 @@ async def run_bully():
         print("Running bully")
         print("My id is:", POD_ID)
         print("My ip is:", POD_IP)
-        if LEADER_IP != None:
-            print("My leader is ", LEADER_ID)
-            other_pods = {k: v for k, v in sorted(other_pods.items(), key=lambda item: item[1], reverse=True)}
-            _, first_value = next(iter(other_pods.items()))
-            if (LEADER_ID!=first_value and LEADER_ID == POD_ID):
-                print("Final message count: ", MESSAGE_COUNT)
-                return
-            if (LEADER_ID==first_value):
-                print("Final message count: ", MESSAGE_COUNT)
-                return
+        if LEADER_IP != None: print("My leader is ", LEADER_ID)
         await asyncio.sleep(5) # wait for everything to be up
         
         # Get all pods doing bully
@@ -125,7 +112,6 @@ async def run_bully():
                         endpoint = '/receive_coordinator'
                         url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
                         try:
-                            MESSAGE_COUNT += 1
                             await asyncio.sleep(random.uniform(0, 1))  # Simulating random delay
                             async with session.post(url, json={'leader_ip': POD_IP, 'leader_id': POD_ID}) as response:
                                 if response.status == 200:
@@ -135,14 +121,12 @@ async def run_bully():
                     
                 
                 
-        print("Total messages this pod: ", MESSAGE_COUNT)
         await asyncio.sleep(2)
     
 
 #Function to start an alection- Sends a post with receive election to all pods in the
 #network with a higher ID than the current pod.
 async def start_election():
-    global MESSAGE_COUNT
     
     global other_pods
     other_pods = {k: v for k, v in sorted(other_pods.items(), key=lambda item: item[1], reverse=True)}
@@ -158,7 +142,6 @@ async def start_election():
                 url = f'http://{pod_ip}:{WEB_PORT}{endpoint}'
                 try:
 
-                    MESSAGE_COUNT += 1
                     await asyncio.sleep(random.uniform(0, 1))  # Simulating random delay
                     async with session.post(url, json={'pod_ip': POD_IP, 'pod_id': POD_ID}) as response:
                         if response.status == 200:
@@ -189,7 +172,6 @@ async def receive_answer(request):
 #This function lets a pod now an election has been started and they should repond OK
 #So the sender know's they're alive and doesn't become the leader.
 async def receive_election(request):
-
     global LEADER_ALIVE
     LEADER_ALIVE = False
     print("Received election message")
@@ -200,15 +182,17 @@ async def receive_election(request):
     # Respond with an OK message
     endpoint = "/receive_answer"
     url = f'http://{resp_ip}:{WEB_PORT}{endpoint}'
-    async with aiohttp.ClientSession() as session:
-        await session.post(url, json={"pod_id": POD_ID})
+    try:
+        async with aiohttp.ClientSession() as session:
+            await session.post(url, json={"pod_id": POD_ID})
+    except Exception as e:
+        print("Failed with:", e)
     return web.json_response(text="OK")
     
     
 #POST /receive_coordinator
 #This function lets a pod know who the new leader is.
 async def receive_coordinator(request):
-
     global LEADER_IP
     global LEADER_ID
     data = await request.json()
@@ -216,6 +200,22 @@ async def receive_coordinator(request):
     LEADER_IP = data['leader_ip']
     print("Got a new leader: ", LEADER_ID)
     return web.json_response(text="OK")
+
+#Getter functions various variables.
+#Used for testing
+async def get_higher_response(request):
+    global HIGHER_RESPONSE
+    return web.json_response({"higher_response": HIGHER_RESPONSE})
+
+async def get_leader_alive(request):
+    global LEADER_ALIVE
+    return web.json_response({"leader_alive": LEADER_ALIVE})
+
+async def get_leader(request):
+    global LEADER_ID
+    global LEADER_IP
+    return web.json_response({"leader_ip": LEADER_IP, "leader_id": LEADER_ID})
+
 
 
 async def background_tasks(app):
@@ -232,15 +232,6 @@ async def background_tasks(app):
             await task
         except asyncio.CancelledError:
             print("Background task cancelled")
-    """
-    print("pik2")
-    yield
-    print("penis")
-    #task.cancel()
-    print("pik3")
-    await task
-    print("pik4")
-    """
 
 if __name__ == "__main__":
     app = web.Application()
@@ -248,6 +239,10 @@ if __name__ == "__main__":
     app.router.add_post('/receive_answer', receive_answer)
     app.router.add_post('/receive_election', receive_election)
     app.router.add_post('/receive_coordinator', receive_coordinator)
+    app.router.add_get('/higher_response', get_higher_response)
+    app.router.add_get('/leader_alive', get_leader_alive) 
+    app.router.add_get('/leader', get_leader) 
+
     app.cleanup_ctx.append(background_tasks)
     web.run_app(app, host='0.0.0.0', port=WEB_PORT)
     
